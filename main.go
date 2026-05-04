@@ -10,7 +10,7 @@ import (
 
 func main() {
 	http := httpclient.New()
-	client := gios.New(http)
+	client := gios.New(http, 3, 30_000)
 
 	resp, err := client.FetchStations()
 	if err != nil {
