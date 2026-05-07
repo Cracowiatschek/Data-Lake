@@ -5,4 +5,5 @@ type LinksDTO struct {
 	Prev  string `json:"prev"`
 	First string `json:"first"`
 	Last  string `json:"last"`
+	Self  string `json:"self"`
 }
