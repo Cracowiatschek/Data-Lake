@@ -1,62 +1,55 @@
 package bronze
 
 type Env struct {
-	layer  string
-	entity string
-	dt     string
-	page   string
+	Layer  string
+	Entity string
+	Dt     string
 }
 
-func SetupStations(dt, page string) Env {
+func SetupStations(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "stations",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "stations",
+		Dt:     dt,
 	}
 }
 
-func SetupStationDetails(dt, page string) Env {
+func SetupStationDetails(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "stationDetails",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "stationDetails",
+		Dt:     dt,
 	}
 }
 
-func SetupSensors(dt, page string) Env {
+func SetupSensors(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "sensors",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "sensors",
+		Dt:     dt,
 	}
 }
 
-func SetupSensorDetails(dt, page string) Env {
+func SetupSensorDetails(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "sensorsDetails",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "sensorsDetails",
+		Dt:     dt,
 	}
 }
 
-func SetupAirQualityIndexes(dt, page string) Env {
+func SetupAirQualityIndexes(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "airQualityIndexes",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "airQualityIndexes",
+		Dt:     dt,
 	}
 }
 
-func SetupMeasurements(dt, page string) Env {
+func SetupMeasurements(dt string) Env {
 	return Env{
-		layer:  "bronze",
-		entity: "measurements",
-		dt:     dt,
-		page:   page,
+		Layer:  "bronze",
+		Entity: "measurements",
+		Dt:     dt,
 	}
 }

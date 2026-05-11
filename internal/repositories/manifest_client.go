@@ -7,35 +7,47 @@ import (
 
 type ManifestRepository struct {
 	Client s3.Client
+	layer  string
+	entity string
+	dt     string
 }
 
-func (r *ManifestRepository) SaveManifest(layer, entity, dt string, manifest any) error {
+func NewManifestRepository(layer, entity, dt string) *ManifestRepository {
+	return &ManifestRepository{
+		Client: *s3.New(),
+		layer:  layer,
+		entity: entity,
+		dt:     dt,
+	}
+}
+
+func (r *ManifestRepository) SaveManifest(manifest any) error {
 	data, err := json.MarshalIndent(manifest, "", " ")
 	if err != nil {
 		return err
 	}
 
-	key := manifestPath(layer, entity, dt)
+	key := ManifestPath(r.layer, r.entity, r.dt)
 
 	return r.Client.Put(key, data)
 }
 
-func (r *ManifestRepository) MarkSuccess(layer, entity, dt string) error {
-	key := successPath(layer, entity, dt)
+func (r *ManifestRepository) MarkSuccess() error {
+	key := SuccessPath(r.layer, r.entity, r.dt)
 	return r.Client.Put(key, []byte{})
 }
 
-func (r *ManifestRepository) MarkFailed(layer, entity, dt string) error {
-	key := failedPath(layer, entity, dt)
+func (r *ManifestRepository) MarkFailed() error {
+	key := FailedPath(r.layer, r.entity, r.dt)
 	return r.Client.Put(key, []byte{})
 }
 
-func (r *ManifestRepository) MarkInProgress(layer, entity, dt string) error {
-	key := inProgressPath(layer, entity, dt)
+func (r *ManifestRepository) MarkInProgress() error {
+	key := InProgressPath(r.layer, r.entity, r.dt)
 	return r.Client.Put(key, []byte{})
 }
 
-func (r *ManifestRepository) ClearInProgress(layer, entity, dt string) error {
-	key := inProgressPath(layer, entity, dt)
+func (r *ManifestRepository) ClearInProgress() error {
+	key := InProgressPath(r.layer, r.entity, r.dt)
 	return r.Client.Delete(key)
 }

@@ -15,23 +15,21 @@ type Client struct {
 	base  string
 	retry int
 	timer int
-	size  string
-	page  string
+	size  int
 }
 
-func New(http *httpclient.Client, timerMs, retryTimes int, pageSize, page string) *Client {
+func New(http *httpclient.Client, timerMs, retryTimes int, pageSize int) *Client {
 	return &Client{
 		http:  http,
 		base:  "https://api.gios.gov.pl/pjp-api/v1/rest",
 		retry: retryTimes,
 		timer: timerMs,
 		size:  pageSize,
-		page:  page,
 	}
 }
 
-func (c *Client) FetchStations() (dto.StationFindAllDTO, error) {
-	url := fmt.Sprintf("%s/station/findAll?page=%s&size=%s", c.base, c.page, c.size)
+func (c *Client) FetchStations(page int) (dto.StationFindAllDTO, error) {
+	url := fmt.Sprintf("%s/station/findAll?page=%d&size=%d", c.base, page, c.size)
 
 	var body []byte
 	var err error
@@ -56,8 +54,8 @@ func (c *Client) FetchStations() (dto.StationFindAllDTO, error) {
 	return result, nil
 }
 
-func (c *Client) FetchStationsDetails() (dto.StationMetadataDTO, error) {
-	url := fmt.Sprintf("%s/metadata/stations?page=%s&size=%s", c.base, c.page, c.size)
+func (c *Client) FetchStationsDetails(page int) (dto.StationMetadataDTO, error) {
+	url := fmt.Sprintf("%s/metadata/stations?page=%d&size=%d", c.base, page, c.size)
 
 	var body []byte
 	var err error
@@ -83,7 +81,7 @@ func (c *Client) FetchStationsDetails() (dto.StationMetadataDTO, error) {
 }
 
 func (c *Client) FetchSensor(stationId int) (dto.SensorByIdDTO, error) {
-	url := fmt.Sprintf("%s/station/sensors/%d?size=%s", c.base, stationId, c.size)
+	url := fmt.Sprintf("%s/station/sensors/%d?size=%d", c.base, stationId, c.size)
 
 	var body []byte
 	var err error
@@ -108,8 +106,8 @@ func (c *Client) FetchSensor(stationId int) (dto.SensorByIdDTO, error) {
 	return result, nil
 }
 
-func (c *Client) FetchSensorDetails() (dto.SensorMetadataDTO, error) {
-	url := fmt.Sprintf("%s/metadata/sensors?page=%s&size=%s", c.base, c.page, c.size)
+func (c *Client) FetchSensorDetails(page int) (dto.SensorMetadataDTO, error) {
+	url := fmt.Sprintf("%s/metadata/sensors?page=%d&size=%d", c.base, page, c.size)
 
 	var body []byte
 	var err error
@@ -134,8 +132,8 @@ func (c *Client) FetchSensorDetails() (dto.SensorMetadataDTO, error) {
 	return result, nil
 }
 
-func (c *Client) FetchAirQualityIndexes(stationId int) (dto.AirQualityIndexesDTO, error) {
-	url := fmt.Sprintf("%s/aqindex/getIndex/%d?size=50page=%s&size=%s", c.base, stationId, c.page, c.size)
+func (c *Client) FetchAirQualityIndexes(stationId int, page int) (dto.AirQualityIndexesDTO, error) {
+	url := fmt.Sprintf("%s/aqindex/getIndex/%d?size=50page=%d&size=%d", c.base, stationId, page, c.size)
 
 	var body []byte
 	var err error
@@ -160,8 +158,8 @@ func (c *Client) FetchAirQualityIndexes(stationId int) (dto.AirQualityIndexesDTO
 	return result, nil
 }
 
-func (c *Client) FetchMeasurement(sensorId int) (dto.MeasurementDTO, error) {
-	url := fmt.Sprintf("%s/data/getData/%d?page=%s&size=%s", c.base, sensorId, c.page, c.size)
+func (c *Client) FetchMeasurement(sensorId int, page int) (dto.MeasurementDTO, error) {
+	url := fmt.Sprintf("%s/data/getData/%d?page=%d&size=%d", c.base, sensorId, page, c.size)
 
 	var body []byte
 	var err error

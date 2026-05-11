@@ -6,7 +6,7 @@ import (
 )
 
 func readFile(env Env, s3 *s3Service.Client) ([]byte, error) {
-	path := repo.BatchPathJSON(env.layer, env.entity, env.dt)
+	path := repo.BatchPathJSON(env.Layer, env.Entity, env.Dt)
 
 	bytes, err := s3.Get(path)
 

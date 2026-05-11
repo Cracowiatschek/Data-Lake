@@ -5,9 +5,9 @@ import (
 	repo "DataLake/internal/repositories"
 )
 
-func saveTempFile(bytes []byte, env Env, s3 *s3Service.Client) error {
-	layer := "tmp_" + env.layer
-	path := repo.PageBasedPathJSON(layer, env.entity, env.dt, env.page)
+func saveTempFile(bytes []byte, env Env, s3 *s3Service.Client, page int) error {
+	layer := "tmp_" + env.Layer
+	path := repo.PageBasedPathJSON(layer, env.Entity, env.Dt, page)
 
 	err := s3.Put(path, bytes)
 
@@ -18,7 +18,7 @@ func saveTempFile(bytes []byte, env Env, s3 *s3Service.Client) error {
 }
 
 func saveFile(bytes []byte, env Env, s3 *s3Service.Client) error {
-	path := repo.BatchPathJSON(env.layer, env.entity, env.dt)
+	path := repo.BatchPathJSON(env.Layer, env.Entity, env.Dt)
 
 	err := s3.Put(path, bytes)
 

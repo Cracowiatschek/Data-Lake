@@ -2,8 +2,8 @@ package repositories
 
 import "fmt"
 
-func PageBasedPathJSON(layer, entity, dt, page string) string {
-	return fmt.Sprintf("%s/%s/dt=%s/page=%s.json", layer, entity, dt, page)
+func PageBasedPathJSON(layer, entity, dt string, page int) string {
+	return fmt.Sprintf("%s/%s/dt=%s/page=%d.json", layer, entity, dt, page)
 }
 
 func AttributeBasedPathJSON(layer, entity, dt, name, value string) string {
