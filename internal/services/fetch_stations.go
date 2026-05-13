@@ -32,9 +32,14 @@ func (s *FetchStationsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
-	err := s.CleanUp()
+	err, goToExit := s.CleanUp()
 	if err != nil {
 		return fmt.Errorf("Fatal error during cleaning up past job")
+	}
+
+	if goToExit {
+		// log something about skipped job
+		return nil
 	}
 
 	manifest.MarkInProgress()
@@ -127,7 +132,7 @@ func (s *FetchStationsService) Run() error {
 	return nil
 }
 
-func (s *FetchStationsService) CleanUp() error {
+func (s *FetchStationsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
@@ -137,31 +142,31 @@ func (s *FetchStationsService) CleanUp() error {
 	batchState, err := s.s3Client.Exists(batchPath)
 
 	if err != nil {
-		return err
+		return err, true
 	}
 
 	if !failedState {
-		return nil
+		return nil, true
 	} else {
 		err = s.s3Client.Delete(failedPath)
 		if err != nil {
-			return err
+			return err, true
 		}
 	}
 
 	if inProgressState {
 		err = s.s3Client.Delete(inProgressPath)
 		if err != nil {
-			return err
+			return err, true
 		}
 	}
 
 	if batchState {
 		err = s.s3Client.Delete(batchPath)
 		if err != nil {
-			return err
+			return err, true
 		}
 	}
 
-	return nil
+	return nil, false
 }

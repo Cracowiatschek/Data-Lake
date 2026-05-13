@@ -17,3 +17,7 @@ func BatchPathJSON(layer, entity, dt string) string {
 func PathParquet(layer, entity, dt, filename string) string {
 	return fmt.Sprintf("%s/%s/dt=%s/%s.parquet", layer, entity, dt, filename)
 }
+
+func PathJson(layer, entity, dt, filename string) string {
+	return fmt.Sprintf("%s/%s/dt=%s/%s.json", layer, entity, dt, filename)
+}
