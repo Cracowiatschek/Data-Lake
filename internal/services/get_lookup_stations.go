@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	dto "DataLake/internal/infrastructure/gios/dto"
 	"DataLake/internal/infrastructure/s3"
 	"DataLake/internal/repositories"
+	"DataLake/internal/repositories/bronze"
 	"DataLake/internal/repositories/silver"
+	"DataLake/internal/repositories/silver/schemas"
 )
 
 type GetLookupStationsService struct {
@@ -25,6 +28,8 @@ func NewGetLookupStationsService(dt string) GetLookupStationsService {
 func (s *GetLookupStationsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
+	sourceEnv := bronze.SetupStations(s.repo.Dt)
+	sourcePath := repositories.BatchPathJSON(sourceEnv.Layer, sourceEnv.Entity, sourceEnv.Dt)
 
 	err, goToExit := s.CleanUp()
 	if err != nil {
@@ -37,11 +42,12 @@ func (s *GetLookupStationsService) Run() error {
 	}
 
 	manifest.MarkInProgress()
-	rawRecords := 0
+
 	breakCounter := 0
+	var rawData []byte
 
 	for {
-		rawData, err := s.s3Client.Get()
+		rawData, err = s.s3Client.Get(sourcePath)
 
 		if err != nil && breakCounter < 3 {
 			breakCounter++
@@ -51,18 +57,38 @@ func (s *GetLookupStationsService) Run() error {
 			manifest.MarkFailed()
 			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
 		}
+		if err == nil {
+			break
+		}
 	}
 
 	dataDecompress, err := gzipDecompress(rawData)
 
-	payload, err := json.MarshalIndent(data, "", " ")
-
 	if err != nil {
 		manifest.MarkFailed()
-		return fmt.Errorf("Error during converting DTO to bytes.")
+		return fmt.Errorf("Error during decompressing data.")
 	}
 
-	path := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
+	var stationsRaw []dto.StationFindAllDTO
+	if err := json.Unmarshal(dataDecompress, &stationsRaw); err != nil {
+		manifest.MarkFailed()
+		return err
+	}
+
+	var stationIds []int
+
+	for _, record := range stationsRaw {
+		for _, station := range record.Stations {
+			stationIds = append(stationIds, station.StationID)
+		}
+	}
+	rawRecords := len(stationsRaw)
+	computedRecords := len(stationIds)
+	stationsResult := schemas.StationIds{
+		StationId: stationIds,
+	}
+
+	path := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList.json")
 
 	return nil
 }
@@ -70,7 +96,7 @@ func (s *GetLookupStationsService) Run() error {
 func (s *GetLookupStationsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
-	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
+	batchPath := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList.json")
 
 	failedState, err := s.s3Client.Exists(failedPath)
 	inProgressState, err := s.s3Client.Exists(inProgressPath)
@@ -104,4 +130,8 @@ func (s *GetLookupStationsService) CleanUp() (error, bool) {
 	}
 
 	return nil, false
+}
+
+func (s *GetLookupStationsService) SearchLeatestExistingSourceDate() string {
+
 }
