@@ -3,6 +3,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	dto "DataLake/internal/infrastructure/gios/dto"
@@ -29,6 +32,10 @@ func (s *GetLookupStationsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	sourceEnv := bronze.SetupStations(s.repo.Dt)
+	sourceDt := s.SearchLeatestExistingSourceDate(sourceEnv.Layer, sourceEnv.Entity)
+	if sourceDt != "" {
+		sourceEnv.Dt = sourceDt
+	}
 	sourcePath := repositories.BatchPathJSON(sourceEnv.Layer, sourceEnv.Entity, sourceEnv.Dt)
 
 	err, goToExit := s.CleanUp()
@@ -89,6 +96,35 @@ func (s *GetLookupStationsService) Run() error {
 	}
 
 	path := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList.json")
+	payload, err := json.MarshalIndent(stationsResult, "", " ")
+	err = s.s3Client.Put(path, payload)
+
+	if err != nil {
+		manifest.MarkFailed()
+		return fmt.Errorf("Error during saving %s.", path)
+	}
+	var files []string
+	files = append(files, sourcePath)
+
+	silverManifest := repositories.ManifestSilver{
+		Files:         files,
+		SourceRecords: rawRecords,
+		Manifest: repositories.Manifest{
+			Records:       computedRecords,
+			Layer:         s.repo.Layer,
+			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+			ProcessedTime: int(time.Since(start).Milliseconds()),
+			Source:        "Źródło danych: GIOŚ - EKOINFONET",
+		},
+	}
+
+	manifest.SaveManifest(silverManifest)
+	err = manifest.ClearInProgress()
+	if err != nil {
+		manifest.MarkFailed()
+		return fmt.Errorf("Error occurence when in progress mark was deleting.")
+	}
+	manifest.MarkSuccess()
 
 	return nil
 }
@@ -132,6 +168,35 @@ func (s *GetLookupStationsService) CleanUp() (error, bool) {
 	return nil, false
 }
 
-func (s *GetLookupStationsService) SearchLeatestExistingSourceDate() string {
+func (s *GetLookupStationsService) SearchLeatestExistingSourceDate(layer, entity string) string {
+	prefix := fmt.Sprintf("%s/%s/", layer, entity)
 
+	keys, err := s.s3Client.List(prefix)
+	if err != nil {
+		return ""
+	}
+
+	re := regexp.MustCompile(`dt=([0-9]{4}-[0-9]{2}-[0-9]{2})`)
+
+	var dates []string
+
+	for _, key := range keys {
+		if !strings.HasSuffix(key, "_SUCCESS") {
+			continue
+		}
+
+		match := re.FindStringSubmatch(key)
+
+		if len(match) > 1 {
+			dates = append(dates, match[1])
+		}
+	}
+
+	if len(dates) == 0 {
+		return ""
+	}
+
+	sort.Strings(dates)
+
+	return dates[len(dates)-1]
 }

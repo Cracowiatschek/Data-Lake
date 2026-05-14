@@ -29,7 +29,7 @@ func CompressJSONList(data []interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecompressJSONList(compressedData []byte) ([]interface{}, error) {
+func gzipDecompress(compressedData []byte) ([]byte, error) {
 	// Dekompresja z GZ
 	reader, err := gzip.NewReader(bytes.NewReader(compressedData))
 	if err != nil {
@@ -43,11 +43,5 @@ func DecompressJSONList(compressedData []byte) ([]interface{}, error) {
 		return nil, err
 	}
 
-	// Konwersja do listy obiektów JSON
-	var result []interface{}
-	if err := json.Unmarshal(decompressedData, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return decompressedData, nil
 }
