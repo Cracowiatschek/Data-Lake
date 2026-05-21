@@ -14,21 +14,21 @@ import (
 	"DataLake/internal/repositories/bronze"
 )
 
-type FetchStationsService struct {
+type FetchStationDetailsService struct {
 	s3Client *s3.Client
 	gios     *gios.Client
 	repo     bronze.Env
 }
 
-func NewFetchStationsService(dt string) FetchStationsService {
-	return FetchStationsService{
+func NewFetchStationDetailsService(dt string) FetchStationDetailsService {
+	return FetchStationDetailsService{
 		s3Client: s3.New(),
 		gios:     gios.New(httpclient.New(), 35000, 3, 500),
-		repo:     bronze.SetupStations(dt),
+		repo:     bronze.SetupStationDetails(dt),
 	}
 }
 
-func (s *FetchStationsService) Run() error {
+func (s *FetchStationDetailsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
@@ -49,19 +49,19 @@ func (s *FetchStationsService) Run() error {
 
 	breakCounter := 0
 
-	var data []dto.StationFindAllDTO
+	var data []dto.StationMetadataDTO
 	var requests []string
 
 	for {
-		d, err := s.gios.FetchStations(page)
+		d, err := s.gios.FetchStationsDetails(page)
 
 		requests = append(requests, d.Links.Self)
-
-		if (err != nil || len(d.Stations) == 0) && breakCounter < 3 {
+		fmt.Println(d.Metadata)
+		if (err != nil || len(d.Metadata) == 0) && breakCounter < 3 {
 			breakCounter++
 			// sometyhing to log
 			continue
-		} else if err != nil || len(d.Stations) == 0 {
+		} else if err != nil || len(d.Metadata) == 0 {
 			manifest.MarkFailed()
 			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
 		}
@@ -71,7 +71,7 @@ func (s *FetchStationsService) Run() error {
 		nextPage := getPageFromAPILink(d.Links.Next)
 		selfPage := getPageFromAPILink(d.Links.Self)
 		lastPage := getPageFromAPILink(d.Links.Self)
-		records += len(d.Stations)
+		records += len(d.Metadata)
 		fmt.Println(d)
 
 		if nextPage != "0" && nextPage != selfPage && selfPage != lastPage {
@@ -113,7 +113,7 @@ func (s *FetchStationsService) Run() error {
 		Requests: requests,
 		Pages:    page,
 		Dt:       s.repo.Dt,
-		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/station/findAll",
+		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/metadata/stations",
 		Manifest: repositories.Manifest{
 			Records:       records,
 			Layer:         s.repo.Layer,
@@ -134,7 +134,7 @@ func (s *FetchStationsService) Run() error {
 	return nil
 }
 
-func (s *FetchStationsService) CleanUp() (error, bool) {
+func (s *FetchStationDetailsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)

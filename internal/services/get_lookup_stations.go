@@ -14,6 +14,7 @@ import (
 	"DataLake/internal/repositories/bronze"
 	"DataLake/internal/repositories/silver"
 	"DataLake/internal/repositories/silver/schemas"
+	"DataLake/pkg"
 )
 
 type GetLookupStationsService struct {
@@ -63,8 +64,7 @@ func (s *GetLookupStationsService) Run() error {
 		} else if err != nil {
 			manifest.MarkFailed()
 			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
-		}
-		if err == nil {
+		} else {
 			break
 		}
 	}
@@ -82,11 +82,40 @@ func (s *GetLookupStationsService) Run() error {
 		return err
 	}
 
+	lastLookupDate := s.SearchLeatestExistingSourceDate(s.repo.Layer, s.repo.Entity)
 	var stationIds []int
+	var lastLookupData []byte
+	if lastLookupDate != "" {
+		lastLookupPath := repositories.PathJson(s.repo.Layer, s.repo.Entity, lastLookupDate, "stationsList")
+		for {
+			lastLookupData, err = s.s3Client.Get(lastLookupPath)
+			if err != nil && breakCounter < 3 {
+				breakCounter++
+				// sometyhing to log
+				continue
+			} else if err != nil {
+				manifest.MarkFailed()
+				return fmt.Errorf("Fatal error during fetch last lookup data!", s.repo.Entity, s.repo.Layer)
+			} else {
+				break
+			}
+		}
+		var rawStationsIds schemas.StationIds
+		if err := json.Unmarshal(lastLookupData, &rawStationsIds); err != nil {
+			manifest.MarkFailed()
+			return err
+		}
+
+		for _, station := range rawStationsIds.StationId {
+			stationIds = append(stationIds, station) // insert extists ID
+		}
+	}
 
 	for _, record := range stationsRaw {
 		for _, station := range record.Stations {
-			stationIds = append(stationIds, station.StationID)
+			if !pkg.IntInSlice(station.StationID, stationIds) {
+				stationIds = append(stationIds, station.StationID) // only insert fresh ID
+			}
 		}
 	}
 	rawRecords := len(stationsRaw)
@@ -95,7 +124,7 @@ func (s *GetLookupStationsService) Run() error {
 		StationId: stationIds,
 	}
 
-	path := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList.json")
+	path := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList")
 	payload, err := json.MarshalIndent(stationsResult, "", " ")
 	err = s.s3Client.Put(path, payload)
 
@@ -143,7 +172,7 @@ func (s *GetLookupStationsService) CleanUp() (error, bool) {
 	}
 
 	if !failedState {
-		return nil, true
+		return nil, false
 	} else {
 		err = s.s3Client.Delete(failedPath)
 		if err != nil {
@@ -176,19 +205,18 @@ func (s *GetLookupStationsService) SearchLeatestExistingSourceDate(layer, entity
 		return ""
 	}
 
-	re := regexp.MustCompile(`dt=([0-9]{4}-[0-9]{2}-[0-9]{2})`)
+	re := regexp.MustCompile(`dt=([0-9]{4}/[0-9]{2}/[0-9]{2})`)
 
 	var dates []string
 
 	for _, key := range keys {
-		if !strings.HasSuffix(key, "_SUCCESS") {
-			continue
-		}
 
-		match := re.FindStringSubmatch(key)
+		if strings.HasSuffix(key, "_SUCCESS") {
+			match := re.FindStringSubmatch(key)
 
-		if len(match) > 1 {
-			dates = append(dates, match[1])
+			if len(match) > 1 {
+				dates = append(dates, match[1])
+			}
 		}
 	}
 

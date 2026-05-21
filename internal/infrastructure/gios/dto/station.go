@@ -21,7 +21,7 @@ type StationDTO struct {
 }
 
 type StationMetadataDTO struct {
-	Metadata   []StationDetailsDTO `json:"Lista stacji pomiarowych"`
+	Metadata   []StationDetailsDTO `json:"Lista metadanych stacji pomiarowych"`
 	Links      LinksDTO            `json:"links"`
 	TotalPages int                 `json:"totalPages"`
 }

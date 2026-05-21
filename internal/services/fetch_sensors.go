@@ -14,21 +14,21 @@ import (
 	"DataLake/internal/repositories/bronze"
 )
 
-type FetchStationsService struct {
+type FetchSensorsService struct {
 	s3Client *s3.Client
 	gios     *gios.Client
 	repo     bronze.Env
 }
 
-func NewFetchStationsService(dt string) FetchStationsService {
-	return FetchStationsService{
+func NewFetchSensorsService(dt string) FetchSensorsService {
+	return FetchSensorsService{
 		s3Client: s3.New(),
 		gios:     gios.New(httpclient.New(), 35000, 3, 500),
-		repo:     bronze.SetupStations(dt),
+		repo:     bronze.SetupSensors(dt),
 	}
 }
 
-func (s *FetchStationsService) Run() error {
+func (s *FetchSensorsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
@@ -134,7 +134,7 @@ func (s *FetchStationsService) Run() error {
 	return nil
 }
 
-func (s *FetchStationsService) CleanUp() (error, bool) {
+func (s *FetchSensorsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
