@@ -3,7 +3,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"DataLake/internal/infrastructure/gios"
@@ -12,23 +14,25 @@ import (
 	"DataLake/internal/infrastructure/s3"
 	"DataLake/internal/repositories"
 	"DataLake/internal/repositories/bronze"
+	"DataLake/internal/repositories/silver"
+	"DataLake/internal/repositories/silver/schemas"
 )
 
-type FetchStationsService struct {
+type FetchAirQualityIndexesService struct {
 	s3Client *s3.Client
 	gios     *gios.Client
 	repo     bronze.Env
 }
 
-func NewFetchStationsService(dt string) FetchStationsService {
-	return FetchStationsService{
+func NewAirQualityIndexesService(dt string) FetchAirQualityIndexesService {
+	return FetchAirQualityIndexesService{
 		s3Client: s3.New(),
-		gios:     gios.New(httpclient.New(), 35000, 3, 500),
-		repo:     bronze.SetupStations(dt),
+		gios:     gios.New(httpclient.New(), 2000, 3, 500),
+		repo:     bronze.SetupAirQualityIndexes(dt),
 	}
 }
 
-func (s *FetchStationsService) Run() error {
+func (s *FetchAirQualityIndexesService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
@@ -44,48 +48,45 @@ func (s *FetchStationsService) Run() error {
 	}
 
 	manifest.MarkInProgress()
-	page := 0
-	records := 0
 
+	var stationsIds schemas.StationIds
+
+	leatestDate := s.GetLeatestLookupStationDate()
+	if leatestDate == "" {
+		fmt.Println("Go to exit. Lookup is empty.")
+		return nil
+	}
+	fmt.Println(leatestDate)
+	lookupData, err := s.GetLookupStations(leatestDate)
+
+	if err := json.Unmarshal(lookupData, &stationsIds); err != nil {
+		manifest.MarkFailed()
+		return err
+	}
+
+	var data []dto.AirQualityIndexesDTO
+	var requests []string
+	records := 0
 	breakCounter := 0
 
-	var data []dto.StationFindAllDTO
-	var requests []string
-
-	for {
-		d, err := s.gios.FetchStations(page)
+	for _, station := range stationsIds.StationId {
+		d, err := s.gios.FetchAirQualityIndexes(station)
 
 		requests = append(requests, d.Links.Self)
 
-		if (err != nil || len(d.Stations) == 0) && breakCounter < 3 {
-			time.Sleep(time.Duration(time.Second * 120))
+		if err != nil && breakCounter < 3 {
+			time.Sleep(time.Duration(time.Second * 2))
 			breakCounter++
 			// sometyhing to log
 			continue
-		} else if err != nil || len(d.Stations) == 0 {
+		} else if err != nil {
 			manifest.MarkFailed()
-			return fmt.Errorf("Fatal error during fetch %s, to layer %s! Request for page %d ", s.repo.Entity, s.repo.Layer, page)
+			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
 		}
 
 		data = append(data, d)
 
-		nextPage := getPageFromAPILink(d.Links.Next)
-		selfPage := getPageFromAPILink(d.Links.Self)
-		lastPage := getPageFromAPILink(d.Links.Last)
-		records += len(d.Stations)
-
-		if nextPage != "0" && nextPage != selfPage && selfPage != lastPage {
-			conversionPage, err := strconv.Atoi(nextPage)
-
-			if err != nil {
-				manifest.MarkFailed()
-				return fmt.Errorf("Fatal error during fetch %s, to layer %s! Conversion page error!", s.repo.Entity, s.repo.Layer)
-			}
-			page = conversionPage
-			time.Sleep(time.Duration(time.Second * 120))
-		} else {
-			break
-		}
+		records++
 	}
 
 	payload, err := json.MarshalIndent(data, "", " ")
@@ -112,9 +113,9 @@ func (s *FetchStationsService) Run() error {
 
 	bronzeManifest := repositories.ManifestBronze{
 		Requests: requests,
-		Pages:    page,
+		Pages:    len(requests),
 		Dt:       s.repo.Dt,
-		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/station/findAll",
+		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/aqindex/getIndex/",
 		Manifest: repositories.Manifest{
 			Records:       records,
 			Layer:         s.repo.Layer,
@@ -135,7 +136,7 @@ func (s *FetchStationsService) Run() error {
 	return nil
 }
 
-func (s *FetchStationsService) CleanUp() (error, bool) {
+func (s *FetchAirQualityIndexesService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
@@ -173,4 +174,49 @@ func (s *FetchStationsService) CleanUp() (error, bool) {
 	}
 
 	return nil, false
+}
+
+func (s *FetchAirQualityIndexesService) GetLookupStations(dt string) ([]byte, error) {
+	env := silver.SetupReferencesStationIds(dt)
+	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "stationsList")
+	fmt.Println(path)
+	data, err := s.s3Client.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (s *FetchAirQualityIndexesService) GetLeatestLookupStationDate() string {
+	env := silver.SetupReferencesStationIds("")
+	prefix := fmt.Sprintf("%s/%s/", env.Layer, env.Entity)
+
+	keys, err := s.s3Client.List(prefix)
+	if err != nil {
+		return ""
+	}
+
+	re := regexp.MustCompile(`dt=([0-9]{4}/[0-9]{2}/[0-9]{2})`)
+
+	var dates []string
+
+	for _, key := range keys {
+
+		if strings.HasSuffix(key, "_SUCCESS") {
+			match := re.FindStringSubmatch(key)
+
+			if len(match) > 1 {
+				fmt.Println(key)
+				dates = append(dates, match[1])
+			}
+		}
+	}
+
+	if len(dates) == 0 {
+		return ""
+	}
+
+	sort.Strings(dates)
+
+	return dates[len(dates)-1]
 }

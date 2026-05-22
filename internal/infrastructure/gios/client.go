@@ -132,9 +132,9 @@ func (c *Client) FetchSensorDetails(page int) (dto.SensorMetadataDTO, error) {
 	return result, nil
 }
 
-func (c *Client) FetchAirQualityIndexes(stationId int, page int) (dto.AirQualityIndexesDTO, error) {
-	url := fmt.Sprintf("%s/aqindex/getIndex/%d?size=50page=%d&size=%d", c.base, stationId, page, c.size)
-
+func (c *Client) FetchAirQualityIndexes(stationId int) (dto.AirQualityIndexesDTO, error) {
+	url := fmt.Sprintf("%s/aqindex/getIndex/%d?size=50", c.base, stationId)
+	// fmt.Println(url)
 	var body []byte
 	var err error
 	for range c.retry {

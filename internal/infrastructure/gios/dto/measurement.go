@@ -1,9 +1,9 @@
 package gios
 
 type AirQualityIndexesDTO struct {
-	Indexes    []AQIndexesDTO `json:"AqIndex"`
-	Links      LinksDTO       `json:"links"`
-	TotalPages int            `json:"totalPages"`
+	Indexes    AQIndexesDTO `json:"AqIndex"`
+	Links      LinksDTO     `json:"links"`
+	TotalPages int          `json:"totalPages"`
 }
 
 type AQIndexesDTO struct {
