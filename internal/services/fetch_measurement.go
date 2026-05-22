@@ -18,21 +18,21 @@ import (
 	"DataLake/internal/repositories/silver/schemas"
 )
 
-type FetchAirQualityIndexesService struct {
+type FetchMeasurementsService struct {
 	s3Client *s3.Client
 	gios     *gios.Client
 	repo     bronze.Env
 }
 
-func NewFetchAirQualityIndexesService(dt string) FetchAirQualityIndexesService {
-	return FetchAirQualityIndexesService{
+func NewFetchMeasurementsService(dt string) FetchMeasurementsService {
+	return FetchMeasurementsService{
 		s3Client: s3.New(),
-		gios:     gios.New(httpclient.New(), 2000, 3, 500),
-		repo:     bronze.SetupAirQualityIndexes(dt),
+		gios:     gios.New(httpclient.New(), 2000, 3, 26),
+		repo:     bronze.SetupMeasurements(dt),
 	}
 }
 
-func (s *FetchAirQualityIndexesService) Run() error {
+func (s *FetchMeasurementsService) Run() error {
 	start := time.Now()
 	s.repo.Dt += "/" + time.Now().Format("15")
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
@@ -50,44 +50,50 @@ func (s *FetchAirQualityIndexesService) Run() error {
 
 	manifest.MarkInProgress()
 
-	var stationsIds schemas.StationIds
+	var sensorIds schemas.SensorIds
 
-	leatestDate := s.GetLeatestLookupStationDate()
+	leatestDate := s.GetLeatestLookupSensorsDate()
 	if leatestDate == "" {
 		fmt.Println("Go to exit. Lookup is empty.")
 		return nil
 	}
 	fmt.Println(leatestDate)
-	lookupData, err := s.GetLookupStations(leatestDate)
+	lookupData, err := s.GetLookupSensors(leatestDate)
 
-	if err := json.Unmarshal(lookupData, &stationsIds); err != nil {
+	if err := json.Unmarshal(lookupData, &sensorIds); err != nil {
 		manifest.MarkFailed()
 		return err
 	}
 
-	var data []dto.AirQualityIndexesDTO
+	var data []dto.MeasurementDTO
 	var requests []string
 	records := 0
 	breakCounter := 0
 
-	for _, station := range stationsIds.StationId {
-		d, err := s.gios.FetchAirQualityIndexes(station)
+	for _, sensor := range sensorIds.SensorId {
+		breakCounter = 0
+		var d dto.MeasurementDTO
+		for {
+			d, err = s.gios.FetchMeasurement(sensor, 0)
 
-		requests = append(requests, d.Links.Self)
+			requests = append(requests, d.Links.Self)
 
-		if err != nil && breakCounter < 3 {
-			time.Sleep(time.Duration(time.Second * 2))
-			breakCounter++
-			// sometyhing to log
-			continue
-		} else if err != nil {
-			manifest.MarkFailed()
-			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
+			if err != nil && breakCounter < 3 {
+				time.Sleep(time.Duration(time.Second * 2))
+				breakCounter++
+				// sometyhing to log
+				continue
+			} else if err != nil {
+				manifest.MarkFailed()
+				return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
+			} else {
+				break
+			}
 		}
 
 		data = append(data, d)
 
-		records++
+		records += len(d.Measurements)
 	}
 
 	payload, err := json.MarshalIndent(data, "", " ")
@@ -116,7 +122,7 @@ func (s *FetchAirQualityIndexesService) Run() error {
 		Requests: requests,
 		Pages:    len(requests),
 		Dt:       s.repo.Dt,
-		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/aqindex/getIndex/",
+		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/data/getData/",
 		Manifest: repositories.Manifest{
 			Records:       records,
 			Layer:         s.repo.Layer,
@@ -137,7 +143,7 @@ func (s *FetchAirQualityIndexesService) Run() error {
 	return nil
 }
 
-func (s *FetchAirQualityIndexesService) CleanUp() (error, bool) {
+func (s *FetchMeasurementsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)
@@ -177,9 +183,9 @@ func (s *FetchAirQualityIndexesService) CleanUp() (error, bool) {
 	return nil, false
 }
 
-func (s *FetchAirQualityIndexesService) GetLookupStations(dt string) ([]byte, error) {
-	env := silver.SetupReferencesStationIds(dt)
-	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "stationsList")
+func (s *FetchMeasurementsService) GetLookupSensors(dt string) ([]byte, error) {
+	env := silver.SetupReferencesSensorIds(dt)
+	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "sensorsList")
 	fmt.Println(path)
 	data, err := s.s3Client.Get(path)
 	if err != nil {
@@ -188,8 +194,8 @@ func (s *FetchAirQualityIndexesService) GetLookupStations(dt string) ([]byte, er
 	return data, nil
 }
 
-func (s *FetchAirQualityIndexesService) GetLeatestLookupStationDate() string {
-	env := silver.SetupReferencesStationIds("")
+func (s *FetchMeasurementsService) GetLeatestLookupSensorsDate() string {
+	env := silver.SetupReferencesSensorIds("")
 	prefix := fmt.Sprintf("%s/%s/", env.Layer, env.Entity)
 
 	keys, err := s.s3Client.List(prefix)

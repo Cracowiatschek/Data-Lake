@@ -9,7 +9,7 @@ import (
 func main() {
 	dt := time.Now().Format("2006/01/02")
 
-	job := services.NewFetchAirQualityIndexesService(dt)
+	job := services.NewFetchMeasurementsService(dt)
 	err := job.Run()
 	if err != nil {
 		fmt.Println(err)

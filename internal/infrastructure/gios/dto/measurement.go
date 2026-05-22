@@ -43,7 +43,7 @@ type MeasurementDTO struct {
 }
 
 type MeasurementValueDTO struct {
-	SensorCode string `json:"Kod stanowiska"`
-	Date       string `json:"Data"`
-	Value      int    `json:"Wartość"`
+	SensorCode string  `json:"Kod stanowiska"`
+	Date       string  `json:"Data"`
+	Value      float32 `json:"Wartość"`
 }
