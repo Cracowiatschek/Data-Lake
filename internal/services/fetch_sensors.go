@@ -3,7 +3,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"DataLake/internal/infrastructure/gios"
@@ -12,6 +14,8 @@ import (
 	"DataLake/internal/infrastructure/s3"
 	"DataLake/internal/repositories"
 	"DataLake/internal/repositories/bronze"
+	"DataLake/internal/repositories/silver"
+	"DataLake/internal/repositories/silver/schemas"
 )
 
 type FetchSensorsService struct {
@@ -23,7 +27,7 @@ type FetchSensorsService struct {
 func NewFetchSensorsService(dt string) FetchSensorsService {
 	return FetchSensorsService{
 		s3Client: s3.New(),
-		gios:     gios.New(httpclient.New(), 35000, 3, 500),
+		gios:     gios.New(httpclient.New(), 2000, 3, 100),
 		repo:     bronze.SetupSensors(dt),
 	}
 }
@@ -44,47 +48,46 @@ func (s *FetchSensorsService) Run() error {
 	}
 
 	manifest.MarkInProgress()
+
+	var stationsIds schemas.StationIds
+
+	leatestDate := s.GetLeatestLookupStationDate()
+	if leatestDate == "" {
+		fmt.Println("Go to exit. Lookup is empty.")
+		return nil
+	}
+	fmt.Println(leatestDate)
+	lookupData, err := s.GetLookupStations(leatestDate)
+
+	if err := json.Unmarshal(lookupData, &stationsIds); err != nil {
+		manifest.MarkFailed()
+		return err
+	}
+
+	var data []dto.SensorByIdDTO
+	var requests []string
 	page := 0
 	records := 0
-
 	breakCounter := 0
 
-	var data []dto.StationFindAllDTO
-	var requests []string
-
-	for {
-		d, err := s.gios.FetchStations(page)
+	for _, station := range stationsIds.StationId {
+		d, err := s.gios.FetchSensor(station)
 
 		requests = append(requests, d.Links.Self)
 
-		if (err != nil || len(d.Stations) == 0) && breakCounter < 3 {
+		if (err != nil || len(d.Sensors) == 0) && breakCounter < 3 {
+			time.Sleep(time.Duration(time.Second * 2))
 			breakCounter++
 			// sometyhing to log
 			continue
-		} else if err != nil || len(d.Stations) == 0 {
+		} else if err != nil || len(d.Sensors) == 0 {
 			manifest.MarkFailed()
 			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
 		}
 
 		data = append(data, d)
 
-		nextPage := getPageFromAPILink(d.Links.Next)
-		selfPage := getPageFromAPILink(d.Links.Self)
-		lastPage := getPageFromAPILink(d.Links.Self)
-		records += len(d.Stations)
-		fmt.Println(d)
-
-		if nextPage != "0" && nextPage != selfPage && selfPage != lastPage {
-			conversionPage, err := strconv.Atoi(nextPage)
-
-			if err != nil {
-				manifest.MarkFailed()
-				return fmt.Errorf("Fatal error during fetch %s, to layer %s! Conversion page error!", s.repo.Entity, s.repo.Layer)
-			}
-			page = conversionPage
-		} else {
-			break
-		}
+		records += len(d.Sensors)
 	}
 
 	payload, err := json.MarshalIndent(data, "", " ")
@@ -113,7 +116,7 @@ func (s *FetchSensorsService) Run() error {
 		Requests: requests,
 		Pages:    page,
 		Dt:       s.repo.Dt,
-		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/station/findAll",
+		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/station/sensors",
 		Manifest: repositories.Manifest{
 			Records:       records,
 			Layer:         s.repo.Layer,
@@ -172,4 +175,49 @@ func (s *FetchSensorsService) CleanUp() (error, bool) {
 	}
 
 	return nil, false
+}
+
+func (s *FetchSensorsService) GetLookupStations(dt string) ([]byte, error) {
+	env := silver.SetupReferencesStationIds(dt)
+	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "stationsList")
+	fmt.Println(path)
+	data, err := s.s3Client.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (s *FetchSensorsService) GetLeatestLookupStationDate() string {
+	env := silver.SetupReferencesStationIds("")
+	prefix := fmt.Sprintf("%s/%s/", env.Layer, env.Entity)
+
+	keys, err := s.s3Client.List(prefix)
+	if err != nil {
+		return ""
+	}
+
+	re := regexp.MustCompile(`dt=([0-9]{4}/[0-9]{2}/[0-9]{2})`)
+
+	var dates []string
+
+	for _, key := range keys {
+
+		if strings.HasSuffix(key, "_SUCCESS") {
+			match := re.FindStringSubmatch(key)
+
+			if len(match) > 1 {
+				fmt.Println(key)
+				dates = append(dates, match[1])
+			}
+		}
+	}
+
+	if len(dates) == 0 {
+		return ""
+	}
+
+	sort.Strings(dates)
+
+	return dates[len(dates)-1]
 }

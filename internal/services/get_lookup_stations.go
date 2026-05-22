@@ -56,7 +56,7 @@ func (s *GetLookupStationsService) Run() error {
 
 	for {
 		rawData, err = s.s3Client.Get(sourcePath)
-
+		fmt.Println(sourcePath)
 		if err != nil && breakCounter < 3 {
 			breakCounter++
 			// sometyhing to log
@@ -95,7 +95,7 @@ func (s *GetLookupStationsService) Run() error {
 				continue
 			} else if err != nil {
 				manifest.MarkFailed()
-				return fmt.Errorf("Fatal error during fetch last lookup data!", s.repo.Entity, s.repo.Layer)
+				return fmt.Errorf("Fatal error during fetch last lookup data!")
 			} else {
 				break
 			}
@@ -161,7 +161,7 @@ func (s *GetLookupStationsService) Run() error {
 func (s *GetLookupStationsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
-	batchPath := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList.json")
+	batchPath := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "stationsList")
 
 	failedState, err := s.s3Client.Exists(failedPath)
 	inProgressState, err := s.s3Client.Exists(inProgressPath)

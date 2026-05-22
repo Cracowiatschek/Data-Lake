@@ -3,6 +3,10 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+
+	// "regexp"
+	// "sort"
+	// "strings"
 	"strconv"
 	"time"
 
@@ -12,23 +16,25 @@ import (
 	"DataLake/internal/infrastructure/s3"
 	"DataLake/internal/repositories"
 	"DataLake/internal/repositories/bronze"
+	// "DataLake/internal/repositories/silver"
+	// "DataLake/internal/repositories/silver/schemas"
 )
 
-type FetchStationDetailsService struct {
+type FetchSensorsDetailsService struct {
 	s3Client *s3.Client
 	gios     *gios.Client
 	repo     bronze.Env
 }
 
-func NewFetchStationDetailsService(dt string) FetchStationDetailsService {
-	return FetchStationDetailsService{
+func NewFetchSensorsDetailsService(dt string) FetchSensorsDetailsService {
+	return FetchSensorsDetailsService{
 		s3Client: s3.New(),
 		gios:     gios.New(httpclient.New(), 35000, 3, 500),
-		repo:     bronze.SetupStationDetails(dt),
+		repo:     bronze.SetupSensorDetails(dt),
 	}
 }
 
-func (s *FetchStationDetailsService) Run() error {
+func (s *FetchSensorsDetailsService) Run() error {
 	start := time.Now()
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
@@ -48,16 +54,17 @@ func (s *FetchStationDetailsService) Run() error {
 	records := 0
 	breakCounter := 0
 
-	var data []dto.StationMetadataDTO
+	var data []dto.SensorMetadataDTO
 	var requests []string
 
 	for {
-		d, err := s.gios.FetchStationsDetails(page)
+		d, err := s.gios.FetchSensorDetails(page)
 
 		requests = append(requests, d.Links.Self)
 
 		if (err != nil || len(d.Metadata) == 0) && breakCounter < 3 {
 			breakCounter++
+			time.Sleep(time.Duration(time.Second * 120))
 			// sometyhing to log
 			continue
 		} else if err != nil || len(d.Metadata) == 0 {
@@ -80,6 +87,7 @@ func (s *FetchStationDetailsService) Run() error {
 				return fmt.Errorf("Fatal error during fetch %s, to layer %s! Conversion page error!", s.repo.Entity, s.repo.Layer)
 			}
 			page = conversionPage
+			time.Sleep(time.Duration(time.Second * 120))
 		} else {
 			break
 		}
@@ -111,7 +119,7 @@ func (s *FetchStationDetailsService) Run() error {
 		Requests: requests,
 		Pages:    page,
 		Dt:       s.repo.Dt,
-		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/metadata/stations",
+		Endpoint: "https://api.gios.gov.pl/pjp-api/v1/rest/metadata/sensors",
 		Manifest: repositories.Manifest{
 			Records:       records,
 			Layer:         s.repo.Layer,
@@ -132,7 +140,7 @@ func (s *FetchStationDetailsService) Run() error {
 	return nil
 }
 
-func (s *FetchStationDetailsService) CleanUp() (error, bool) {
+func (s *FetchSensorsDetailsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.BatchPathJSON(s.repo.Layer, s.repo.Entity, s.repo.Dt)

@@ -23,7 +23,7 @@ type FetchStationsService struct {
 func NewFetchStationsService(dt string) FetchStationsService {
 	return FetchStationsService{
 		s3Client: s3.New(),
-		gios:     gios.New(httpclient.New(), 35000, 3, 500),
+		gios:     gios.New(httpclient.New(), 35000, 3, 50),
 		repo:     bronze.SetupStations(dt),
 	}
 }
@@ -58,22 +58,22 @@ func (s *FetchStationsService) Run() error {
 		requests = append(requests, d.Links.Self)
 
 		if (err != nil || len(d.Stations) == 0) && breakCounter < 3 {
+			time.Sleep(time.Duration(time.Second * 120))
 			breakCounter++
 			// sometyhing to log
 			continue
 		} else if err != nil || len(d.Stations) == 0 {
 			manifest.MarkFailed()
-			return fmt.Errorf("Fatal error during fetch %s, to layer %s!", s.repo.Entity, s.repo.Layer)
+			return fmt.Errorf("Fatal error during fetch %s, to layer %s! Request for page %d ", s.repo.Entity, s.repo.Layer, page)
 		}
 
 		data = append(data, d)
 
 		nextPage := getPageFromAPILink(d.Links.Next)
 		selfPage := getPageFromAPILink(d.Links.Self)
-		lastPage := getPageFromAPILink(d.Links.Self)
+		lastPage := getPageFromAPILink(d.Links.Last)
 		records += len(d.Stations)
-		fmt.Println(d)
-
+		fmt.Println(selfPage, nextPage, len(d.Stations))
 		if nextPage != "0" && nextPage != selfPage && selfPage != lastPage {
 			conversionPage, err := strconv.Atoi(nextPage)
 
@@ -82,13 +82,14 @@ func (s *FetchStationsService) Run() error {
 				return fmt.Errorf("Fatal error during fetch %s, to layer %s! Conversion page error!", s.repo.Entity, s.repo.Layer)
 			}
 			page = conversionPage
+			time.Sleep(time.Duration(time.Second * 120))
 		} else {
 			break
 		}
 	}
 
 	payload, err := json.MarshalIndent(data, "", " ")
-
+	fmt.Println(len(payload))
 	if err != nil {
 		manifest.MarkFailed()
 		return fmt.Errorf("Error during converting DTO to bytes.")
