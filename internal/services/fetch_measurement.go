@@ -34,7 +34,7 @@ func NewFetchMeasurementsService(dt string) FetchMeasurementsService {
 
 func (s *FetchMeasurementsService) Run() error {
 	start := time.Now()
-	s.repo.Dt += "/" + time.Now().Format("15")
+	// s.repo.Dt += "/" + time.Now().Format("15")
 	manifest := repositories.NewManifestRepository(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 
 	err, goToExit := s.CleanUp()
