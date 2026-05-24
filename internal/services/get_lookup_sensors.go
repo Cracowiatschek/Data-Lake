@@ -159,15 +159,21 @@ func (s *GetLookupSensorsService) Run() error {
 
 func (s *GetLookupSensorsService) CleanUp() (error, bool) {
 	failedPath := repositories.FailedPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
+	successPath := repositories.SuccessPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	inProgressPath := repositories.InProgressPath(s.repo.Layer, s.repo.Entity, s.repo.Dt)
 	batchPath := repositories.PathJson(s.repo.Layer, s.repo.Entity, s.repo.Dt, "sensorsList ")
 
 	failedState, err := s.s3Client.Exists(failedPath)
+	successState, err := s.s3Client.Exists(successPath)
 	inProgressState, err := s.s3Client.Exists(inProgressPath)
 	batchState, err := s.s3Client.Exists(batchPath)
 
 	if err != nil {
 		return err, true
+	}
+
+	if successState {
+		return nil, false
 	}
 
 	if !failedState {
