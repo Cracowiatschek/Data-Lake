@@ -6,5 +6,5 @@ type Measurement struct {
 	SensorID      int
 	StationID     int
 	EventDatetime time.Time
-	Eventvalue    int
+	EventValue    float32
 }
