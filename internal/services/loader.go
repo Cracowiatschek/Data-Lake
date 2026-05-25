@@ -9,26 +9,26 @@ type LoaderService struct {
 	Client s3.Client
 }
 
-func (l *LoaderService) LoadLeatestAqIndexes(rangeInDays int) ([]dto.AirQualityIndexesDTO, error) {
+func (l *LoaderService) LoadLeatestAqIndexesFromBronze(rangeInDays int) ([]dto.AirQualityIndexesDTO, error) {
 	return nil, nil
 }
 
-func (l *LoaderService) LoadLeatestMeasurements(rangeInDays int) ([]dto.MeasurementDTO, error) {
+func (l *LoaderService) LoadLeatestMeasurementsFromBronze(rangeInDays int) ([]dto.MeasurementDTO, error) {
 	return nil, nil
 }
 
-func (l *LoaderService) LoadLeatestStation() ([]dto.StationFindAllDTO, error) {
+func (l *LoaderService) LoadLeatestStationFromBronze() ([]dto.StationFindAllDTO, error) {
 	return nil, nil
 }
 
-func (l *LoaderService) LoadLeatestStationDetails() ([]dto.StationMetadataDTO, error) {
+func (l *LoaderService) LoadLeatestStationDetailsFromBronze() ([]dto.StationMetadataDTO, error) {
 	return nil, nil
 }
 
-func (l *LoaderService) LoadLeatestSensor() ([]dto.SensorByIdDTO, error) {
+func (l *LoaderService) LoadLeatestSensorFromBronze() ([]dto.SensorByIdDTO, error) {
 	return nil, nil
 }
 
-func (l *LoaderService) LoadLeatestSensorDetails() ([]dto.StationMetadataDTO, error) {
+func (l *LoaderService) LoadLeatestSensorDetailsFromBronze() ([]dto.StationMetadataDTO, error) {
 	return nil, nil
 }
