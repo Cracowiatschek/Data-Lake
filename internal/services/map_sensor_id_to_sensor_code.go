@@ -186,6 +186,10 @@ func (s *GetMapSensorIdsToSensorCodesService) CleanUp() (error, bool) {
 		return nil, false
 	}
 
+	if inProgressState && !failedState {
+		return nil, false
+	}
+
 	if !failedState {
 		return nil, false
 	} else {
