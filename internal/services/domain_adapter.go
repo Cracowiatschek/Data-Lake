@@ -28,24 +28,63 @@ func (d *DomainAdapterService) AdaptStationFromBronze(StationID int, BasicData m
 	return domain.Station{}
 }
 
-func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData map[int][]dto.SensorDTO, DetailsData map[string][]dto.SensorDetailsDTO, MeasuermentsData map[int][]dto.MeasurementValueDTO) []domain.Sensor {
+func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData map[int][]dto.SensorDTO, DetailsData map[string]dto.SensorDetailsDTO, MeasuermentsData map[int][]dto.MeasurementValueDTO) []domain.Sensor {
 	basicSourceRecords := BasicData[StationID]
 
 	var result []domain.Sensor
 	errors := 0
 
 	for _, basicRecord := range basicSourceRecords {
+		var measurementsRecords []domain.Measurement
+		var endDate time.Time
 		sensorCode := MapSesnorIdToCode[basicRecord.SensorID]
 		detailsRecords := DetailsData[sensorCode]
-		measurements := MeasuermentsData[basicRecord.SensorID]
-		measurementsRecords := d.AdaptMeasurementFromBronze(basicRecord.SensorID, measurements)
-
-		record := domain.Sensor{
-			SensorID: basicRecord.SensorID,
+		if d.Measurements {
+			measurements := MeasuermentsData[basicRecord.SensorID]
+			measurementsRecords = d.AdaptMeasurementFromBronze(basicRecord.SensorID, measurements)
+		} else {
+			measurementsRecords = nil
+		}
+		startDate, err := time.Parse("12/31/2003", detailsRecords.StartDate)
+		if err != nil {
+			fmt.Printf("Error occured during startDate parsing. SensorID: %d, Value: %s", basicRecord.SensorID, detailsRecords.StartDate)
+		}
+		if len(detailsRecords.EndDate) > 0 {
+			endDate, err = time.Parse("12/31/2003", detailsRecords.EndDate)
+			if err != nil {
+				fmt.Printf("Error occured during startDate parsing. SensorID: %d, Value: %s", basicRecord.SensorID, detailsRecords.EndDate)
+			}
+		} else {
+			endDate = time.Date(2999, time.December, 31, 23, 59, 59, 0, time.UTC)
 		}
 
+		if err != nil {
+			errors++
+			continue
+		}
+		record := domain.Sensor{
+			SensorID:         basicRecord.SensorID,
+			Indicator:        basicRecord.Indicator,
+			IndicatorFormula: basicRecord.IndicatorFormula,
+			IndicatorCode:    basicRecord.IndicatorFormula,
+			Name:             sensorCode,
+			AveragingTime:    detailsRecords.AveragingTime,
+			MeasurementType:  detailsRecords.MeasurementType,
+			StartDate:        startDate,
+			EndDate:          endDate,
+			Measurements:     measurementsRecords,
+		}
+
+		result = append(result, record)
+
 	}
-	return nil
+	fmt.Printf("Station %d has %d errors in Sensors records.", StationID, errors)
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
 }
 
 func (d *DomainAdapterService) AdaptMeasurementFromBronze(SensorID int, Records []dto.MeasurementValueDTO) []domain.Measurement {
@@ -56,6 +95,10 @@ func (d *DomainAdapterService) AdaptMeasurementFromBronze(SensorID int, Records 
 		eventDatetime, err := time.Parse("2026-05-28 18:20:24", i.Date)
 		if err != nil {
 			fmt.Printf("Error occured during eventDatetime parsing. SensorID: %d, Value: %s", SensorID, i.Date)
+		}
+		if err != nil {
+			errors++
+			continue
 		}
 
 		record := domain.Measurement{

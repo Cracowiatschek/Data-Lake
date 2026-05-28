@@ -8,7 +8,7 @@ type Sensor struct {
 	Indicator        string
 	IndicatorFormula string
 	IndicatorCode    string
-	Name             int
+	Name             string
 	AveragingTime    string
 	MeasurementType  string
 	StartDate        time.Time
