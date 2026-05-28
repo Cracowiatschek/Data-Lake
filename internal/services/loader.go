@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	dto "DataLake/internal/infrastructure/gios/dto"
 	"DataLake/internal/infrastructure/s3"
@@ -17,12 +19,132 @@ type LoaderService struct {
 	Client s3.Client
 }
 
-func (l *LoaderService) LoadLeatestAqIndexesFromBronze(rangeInDays int) ([]dto.AirQualityIndexesDTO, error) {
-	return nil, nil
+func NewLoaderService() LoaderService {
+	return LoaderService{
+		Client: *s3.New(),
+	}
 }
 
-func (l *LoaderService) LoadLeatestMeasurementsFromBronze(rangeInDays int) ([]dto.MeasurementDTO, error) {
-	return nil, nil
+func (l *LoaderService) LoadLeatestAqIndexesFromBronze(rangeInDays int) ([][]dto.AirQualityIndexesDTO, error) {
+	env := bronze.SetupMeasurements("")
+	leatestDate := l.SearchLeatestDate(env.Layer, env.Entity)
+	if leatestDate == "" {
+		return nil, fmt.Errorf("Leatest date of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+	}
+	env.Dt = leatestDate
+
+	var paths []string
+	startDate, err := time.Parse("2006/01/02", env.Dt)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error has occured during date parsing.")
+	}
+
+	for i := range rangeInDays {
+		for j := range 24 {
+			dt := startDate.AddDate(0, 0, -i).Format("2006/01/02") + "/" + strconv.Itoa(j)
+			succesPath := repositories.SuccessPath(env.Layer, env.Entity, dt)
+			pathIsExist, err := l.Client.Exists(succesPath)
+
+			if err != nil {
+				fmt.Println("Error has occured during checking file existing.")
+			}
+
+			if pathIsExist {
+				paths = append(paths, repositories.BatchPathJSON(env.Layer, env.Entity, dt))
+			}
+		}
+	}
+
+	var data [][]dto.AirQualityIndexesDTO
+	for _, sourcePath := range paths {
+		breakCounter := 0
+		for {
+			rawData, err := l.Client.Get(sourcePath)
+			if err != nil && breakCounter < 3 {
+				breakCounter++
+				// sometyhing to log
+				continue
+			} else if err != nil {
+				return nil, fmt.Errorf("Leatest file of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+			} else {
+				dataDecompress, err := gzipDecompress(rawData)
+
+				if err != nil {
+					return nil, fmt.Errorf("Error during decompressing data.")
+				}
+
+				var aqIndex []dto.AirQualityIndexesDTO
+				if err := json.Unmarshal(dataDecompress, &aqIndex); err != nil {
+					return nil, err
+				}
+				data = append(data, aqIndex)
+				break
+			}
+		}
+	}
+
+	return data, nil
+}
+
+func (l *LoaderService) LoadLeatestMeasurementsFromBronze(rangeInDays int) ([][]dto.MeasurementDTO, error) {
+	env := bronze.SetupMeasurements("")
+	leatestDate := l.SearchLeatestDate(env.Layer, env.Entity)
+	if leatestDate == "" {
+		return nil, fmt.Errorf("Leatest date of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+	}
+	env.Dt = leatestDate
+
+	var paths []string
+	startDate, err := time.Parse("2006/01/02", env.Dt)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error has occured during date parsing.")
+	}
+
+	for i := range rangeInDays {
+		dt := startDate.AddDate(0, 0, -i).Format("2006/01/02")
+		succesPath := repositories.SuccessPath(env.Layer, env.Entity, dt)
+		pathIsExist, err := l.Client.Exists(succesPath)
+
+		if err != nil {
+			fmt.Println("Error has occured during checking file existing.")
+		}
+
+		if pathIsExist {
+			paths = append(paths, repositories.BatchPathJSON(env.Layer, env.Entity, dt))
+		}
+	}
+
+	var data [][]dto.MeasurementDTO
+	for _, sourcePath := range paths {
+		breakCounter := 0
+		for {
+			rawData, err := l.Client.Get(sourcePath)
+			if err != nil && breakCounter < 3 {
+				breakCounter++
+				// sometyhing to log
+				continue
+			} else if err != nil {
+				return nil, fmt.Errorf("Leatest file of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+			} else {
+				dataDecompress, err := gzipDecompress(rawData)
+
+				if err != nil {
+					return nil, fmt.Errorf("Error during decompressing data.")
+				}
+
+				var measurements []dto.MeasurementDTO
+				if err := json.Unmarshal(dataDecompress, &measurements); err != nil {
+					return nil, err
+				}
+				data = append(data, measurements)
+				break
+			}
+		}
+	}
+
+	return data, nil
 }
 
 func (l *LoaderService) LoadLeatestStationFromBronze() ([]dto.StationFindAllDTO, error) {
