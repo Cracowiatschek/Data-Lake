@@ -7,7 +7,7 @@ type AirQualityIndexesDTO struct {
 }
 
 type AQIndexesDTO struct {
-	SensorID             int    `json:"Identyfikator stacji pomiarowej"`
+	StationID            int    `json:"Identyfikator stacji pomiarowej"`
 	IndexCalculationDate string `json:"Data wykonania obliczeń indeksu"`
 	IndexValue           int    `json:"Wartość indeksu"`
 	IndexCategory        string `json:"Nazwa kategorii indeksu"`
