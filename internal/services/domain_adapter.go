@@ -2,6 +2,8 @@ package services
 
 import (
 	"DataLake/internal/domain"
+	// "DataLake/internal/repositories"
+	// "DataLake/internal/repositories/silver/schemas"
 	"fmt"
 	"time"
 
@@ -9,7 +11,6 @@ import (
 	// dto "DataLake/internal/infrastructure/gios/dto"
 	// httpclient "DataLake/internal/infrastructure/http"
 	dto "DataLake/internal/infrastructure/gios/dto"
-	"DataLake/internal/infrastructure/s3"
 )
 
 type DomainAdapterService struct {
@@ -22,16 +23,54 @@ type DomainAdapterService struct {
 	MeasurementsRange int
 }
 
-func (d *DomainAdapterService) AdaptStationFromBronze(Client s3.Client) []domain.Station {
+func (d *DomainAdapterService) AdaptStationFromBronze(StationID int, BasicData map[int][]dto.StationDTO, DetailsData map[int][]dto.StationDetailsDTO, AqIndexes []domain.AqIndex, Sensors []domain.Sensor) domain.Station {
+
+	return domain.Station{}
+}
+
+func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData map[int][]dto.SensorDTO, DetailsData map[string][]dto.SensorDetailsDTO, MeasuermentsData map[int][]dto.MeasurementValueDTO) []domain.Sensor {
+	basicSourceRecords := BasicData[StationID]
+
+	var result []domain.Sensor
+	errors := 0
+
+	for _, basicRecord := range basicSourceRecords {
+		sensorCode := MapSesnorIdToCode[basicRecord.SensorID]
+		detailsRecords := DetailsData[sensorCode]
+		measurements := MeasuermentsData[basicRecord.SensorID]
+		measurementsRecords := d.AdaptMeasurementFromBronze(basicRecord.SensorID, measurements)
+
+		record := domain.Sensor{
+			SensorID: basicRecord.SensorID,
+		}
+
+	}
 	return nil
 }
 
-func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, Client s3.Client) []domain.Sensor {
-	return nil
-}
+func (d *DomainAdapterService) AdaptMeasurementFromBronze(SensorID int, Records []dto.MeasurementValueDTO) []domain.Measurement {
+	var result []domain.Measurement
+	errors := 0
 
-func (d *DomainAdapterService) AdaptMeasurementFromBronze(SensorID int, Client s3.Client) []domain.Measurement {
-	return nil
+	for _, i := range Records {
+		eventDatetime, err := time.Parse("2026-05-28 18:20:24", i.Date)
+		if err != nil {
+			fmt.Printf("Error occured during eventDatetime parsing. SensorID: %d, Value: %s", SensorID, i.Date)
+		}
+
+		record := domain.Measurement{
+			EventValue:    i.Value,
+			EventDatetime: eventDatetime,
+		}
+		result = append(result, record)
+	}
+	fmt.Printf("Sensor %d has %d errors in Measurements records.", SensorID, errors)
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
 }
 
 func (d *DomainAdapterService) AdaptAqIndexFromBronze(StationID int, Data map[int][]dto.AQIndexesDTO) []domain.AqIndex {
@@ -76,7 +115,7 @@ func (d *DomainAdapterService) AdaptAqIndexFromBronze(StationID int, Data map[in
 			continue
 		}
 		record := domain.AqIndex{
-			StationID:                       i.StationID,
+			// StationID:                       i.StationID,
 			GeneralIndexCalculationDatetime: generalIndexCalculationDatetime,
 			GeneralIndexValue:               i.IndexValue,
 			GeneralIndexCategory:            i.IndexCategory,
@@ -101,7 +140,7 @@ func (d *DomainAdapterService) AdaptAqIndexFromBronze(StationID int, Data map[in
 		result = append(result, record)
 	}
 
-	fmt.Printf("Station has %d errors in records.", errors)
+	fmt.Printf("Station %d has %d errors in AqIndex records.", StationID, errors)
 
 	if len(result) == 0 {
 		return nil
