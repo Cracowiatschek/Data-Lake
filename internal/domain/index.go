@@ -3,7 +3,7 @@ package domain
 import "time"
 
 type AqIndex struct {
-	StationID                       int
+	// StationID                       int
 	GeneralIndexCalculationDatetime time.Time
 	GeneralIndexValue               int
 	GeneralIndexCategory            string

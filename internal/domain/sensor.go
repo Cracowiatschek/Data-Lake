@@ -3,8 +3,8 @@ package domain
 import "time"
 
 type Sensor struct {
-	SensorID         int
-	StationID        int
+	SensorID int
+	// StationID        int
 	Indicator        string
 	IndicatorFormula string
 	IndicatorCode    string

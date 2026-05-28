@@ -23,7 +23,7 @@ type SensorMetadataDTO struct {
 
 type SensorDetailsDTO struct {
 	SensorNumber    int    `json:"Nr"`
-	StationCode     string `json:"Kod stanowiska"`
+	SensorCode      string `json:"Kod stanowiska"`
 	StationName     string `json:"Kod stacji"`
 	OldStationName  string `json:"Stary Kod stacji"`
 	IndictorCode    string `json:"Wskaźnik - kod"`
