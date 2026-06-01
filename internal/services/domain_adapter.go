@@ -2,6 +2,8 @@ package services
 
 import (
 	"DataLake/internal/domain"
+	"strconv"
+
 	// "DataLake/internal/repositories"
 	// "DataLake/internal/repositories/silver/schemas"
 	"fmt"
@@ -23,25 +25,61 @@ type DomainAdapterService struct {
 	MeasurementsRange int
 }
 
-func (d *DomainAdapterService) AdaptStationFromBronze(StationID int, BasicData map[int][]dto.StationDTO, DetailsData map[int][]dto.StationDetailsDTO, AqIndexes []domain.AqIndex, Sensors []domain.Sensor) domain.Station {
+func (d *DomainAdapterService) AdaptStationFromBronze(StationID int, BasicData dto.StationDTO, DetailsData dto.StationDetailsDTO, AqIndexes []domain.AqIndex, Sensors []domain.Sensor) domain.Station {
+	latitude, err := strconv.ParseFloat(BasicData.Latitude, 32)
+	if err != nil {
+		fmt.Printf("Error occured during latitude parsing. StationID: %d, Value: %s", StationID, BasicData.Latitude)
+	}
+	longitude, err := strconv.ParseFloat(BasicData.Longitude, 32)
+	if err != nil {
+		fmt.Printf("Error occured during longitude parsing. StationID: %d, Value: %s", StationID, BasicData.Longitude)
+	}
 
-	return domain.Station{}
+	startDate, err := time.Parse("12/31/2003", DetailsData.StartDate)
+	if err != nil {
+		fmt.Printf("Error occured during startDate parsing. StationID: %d, Value: %s", StationID, DetailsData.StartDate)
+	}
+	var endDate time.Time
+	if len(DetailsData.EndDate) > 0 {
+		endDate, err = time.Parse("12/31/2003", DetailsData.EndDate)
+		if err != nil {
+			fmt.Printf("Error occured during endDate parsing. StationID: %d, Value: %s", StationID, DetailsData.EndDate)
+		}
+	} else {
+		endDate = time.Date(2999, time.December, 31, 23, 59, 59, 0, time.UTC)
+	}
+	return domain.Station{
+		StationID:    StationID,
+		Code:         BasicData.StationCode,
+		Name:         BasicData.StationName,
+		Latitude:     float32(latitude),
+		Longitude:    float32(longitude),
+		City:         BasicData.City,
+		District:     BasicData.Distirct,
+		Municipality: BasicData.Municipality,
+		Voivodeship:  BasicData.Voivodeship,
+		Street:       BasicData.Street,
+		StartDate:    startDate,
+		EndDate:      endDate,
+		Type:         DetailsData.StationType,
+		FieldType:    DetailsData.FieldType,
+		Category:     DetailsData.StationCategory,
+		Sensors:      Sensors,
+		AqIndexes:    AqIndexes,
+	}
 }
 
-func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData map[int][]dto.SensorDTO, DetailsData map[string]dto.SensorDetailsDTO, MeasuermentsData map[int][]dto.MeasurementValueDTO) []domain.Sensor {
-	basicSourceRecords := BasicData[StationID]
-
+func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData []dto.SensorDTO, DetailsData map[string]dto.SensorDetailsDTO, MeasuermentsData []dto.MeasurementValueDTO) []domain.Sensor {
 	var result []domain.Sensor
 	errors := 0
 
-	for _, basicRecord := range basicSourceRecords {
+	for _, basicRecord := range BasicData {
 		var measurementsRecords []domain.Measurement
 		var endDate time.Time
 		sensorCode := MapSesnorIdToCode[basicRecord.SensorID]
 		detailsRecords := DetailsData[sensorCode]
 		if d.Measurements {
-			measurements := MeasuermentsData[basicRecord.SensorID]
-			measurementsRecords = d.AdaptMeasurementFromBronze(basicRecord.SensorID, measurements)
+			measurementsRecords = d.AdaptMeasurementFromBronze(basicRecord.SensorID, MeasuermentsData)
 		} else {
 			measurementsRecords = nil
 		}
@@ -52,7 +90,7 @@ func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdT
 		if len(detailsRecords.EndDate) > 0 {
 			endDate, err = time.Parse("12/31/2003", detailsRecords.EndDate)
 			if err != nil {
-				fmt.Printf("Error occured during startDate parsing. SensorID: %d, Value: %s", basicRecord.SensorID, detailsRecords.EndDate)
+				fmt.Printf("Error occured during endDate parsing. SensorID: %d, Value: %s", basicRecord.SensorID, detailsRecords.EndDate)
 			}
 		} else {
 			endDate = time.Date(2999, time.December, 31, 23, 59, 59, 0, time.UTC)
