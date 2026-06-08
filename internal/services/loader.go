@@ -13,6 +13,8 @@ import (
 	"DataLake/internal/infrastructure/s3"
 	"DataLake/internal/repositories"
 	"DataLake/internal/repositories/bronze"
+	"DataLake/internal/repositories/silver"
+	"DataLake/internal/repositories/silver/schemas"
 )
 
 type LoaderService struct {
@@ -321,4 +323,94 @@ func (l *LoaderService) SearchLeatestDate(layer, entity string) string {
 	sort.Strings(dates)
 
 	return dates[len(dates)-1]
+}
+
+func (l *LoaderService) LoadLeatestLookupStation() (schemas.StationIds, error) {
+	env := silver.SetupReferencesStationIds("")
+	leatestDate := l.SearchLeatestDate(env.Layer, env.Entity)
+	if leatestDate == "" {
+		return schemas.StationIds{}, fmt.Errorf("Leatest date of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+	}
+	env.Dt = leatestDate
+
+	sourcePath := repositories.PathJson(env.Layer, env.Entity, env.Dt, "stationsList")
+	breakCounter := 0
+
+	for {
+		rawData, err := l.Client.Get(sourcePath)
+		if err != nil && breakCounter < 3 {
+			breakCounter++
+			// sometyhing to log
+			continue
+		} else if err != nil {
+			return schemas.StationIds{}, fmt.Errorf("Leatest file of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+		} else {
+			var stationRaw schemas.StationIds
+			if err := json.Unmarshal(rawData, &stationRaw); err != nil {
+				return schemas.StationIds{}, err
+			}
+
+			return stationRaw, nil
+		}
+	}
+}
+
+func (l *LoaderService) LoadLeatestLookupSensors() (schemas.SensorIds, error) {
+	env := silver.SetupReferencesSensorIds("")
+	leatestDate := l.SearchLeatestDate(env.Layer, env.Entity)
+	if leatestDate == "" {
+		return schemas.SensorIds{}, fmt.Errorf("Leatest date of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+	}
+	env.Dt = leatestDate
+
+	sourcePath := repositories.PathJson(env.Layer, env.Entity, env.Dt, "sensorsList")
+	breakCounter := 0
+
+	for {
+		rawData, err := l.Client.Get(sourcePath)
+		if err != nil && breakCounter < 3 {
+			breakCounter++
+			// sometyhing to log
+			continue
+		} else if err != nil {
+			return schemas.SensorIds{}, fmt.Errorf("Leatest file of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+		} else {
+			var sensorRaw schemas.SensorIds
+			if err := json.Unmarshal(rawData, &sensorRaw); err != nil {
+				return schemas.SensorIds{}, err
+			}
+
+			return sensorRaw, nil
+		}
+	}
+}
+
+func (l *LoaderService) LoadLeatestMapSensorIdSensorCode() (schemas.MapSensorIdSensorCode, error) {
+	env := silver.SetupReferencesSensorIds("")
+	leatestDate := l.SearchLeatestDate(env.Layer, env.Entity)
+	if leatestDate == "" {
+		return schemas.MapSensorIdSensorCode{}, fmt.Errorf("Leatest date of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+	}
+	env.Dt = leatestDate
+
+	sourcePath := repositories.PathJson(env.Layer, env.Entity, env.Dt, "mapSensorIdToSensorCode")
+	breakCounter := 0
+
+	for {
+		rawData, err := l.Client.Get(sourcePath)
+		if err != nil && breakCounter < 3 {
+			breakCounter++
+			// sometyhing to log
+			continue
+		} else if err != nil {
+			return schemas.MapSensorIdSensorCode{}, fmt.Errorf("Leatest file of %s layer, %s entity wasn't found", env.Layer, env.Entity)
+		} else {
+			var mapSensorRaw schemas.MapSensorIdSensorCode
+			if err := json.Unmarshal(rawData, &mapSensorRaw); err != nil {
+				return schemas.MapSensorIdSensorCode{}, err
+			}
+
+			return mapSensorRaw, nil
+		}
+	}
 }

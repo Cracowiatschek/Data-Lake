@@ -2,17 +2,11 @@ package services
 
 import (
 	"DataLake/internal/domain"
-	"strconv"
-	"strings"
-	"regexp"
-	"DataLake/internal/repositories"
-	"DataLake/internal/repositories/silver/schemas"
-	"DataLake/internal/repositories/silver"
 	"fmt"
+	"strconv"
 	"time"
-	"sort"
-	"encoding/json"
-	"DataLake/internal/infrastructure/s3"
+
+	// "DataLake/internal/infrastructure/s3"
 	// "DataLake/internal/infrastructure/gios"
 	// dto "DataLake/internal/infrastructure/gios/dto"
 	// httpclient "DataLake/internal/infrastructure/http"
@@ -27,53 +21,40 @@ type DomainAdapterService struct {
 	AqIndexRange      int
 	Measurements      bool
 	MeasurementsRange int
-	s3Client *s3.Client
+	// Client *s3.Client
 }
 
 func (d *DomainAdapterService) MakeAdaptation() ([]domain.Station, error) {
-	var stationsIds schemas.StationIds
-
-	leatestStation := d.GetLeatestLookupStationDate()
-	if leatestStation == "" {
-		fmt.Println("Go to exit. Lookup is empty.")
-		return nil,nil // to do 
-	}
-	// fmt.Println(leatestStation)
-	lookupStation, err := d.GetLookupStations(leatestStation)
-	if err != nil {
-		return nil, fmt.Errorf("Service didn't find correct lookup stations dataset.")
-	}
-	if err := json.Unmarshal(lookupStation, &stationsIds); err != nil {
-		return nil, fmt.Errorf("Error was happend during unpacking lookup station.")
-	}
-	
-	var sensorIds schemas.SensorIds
-	var 
-	
-	if d.Sensors || d.Measurements {
-		leatestSensor := d.GetLeatestLookupSensorsDate()
-		if leatestSensor == "" {
-			fmt.Println("Go to exit. Lookup is empty.")
-			return nil, nil
-		}
-		// fmt.Println(leatestSensor)
-		lookupSensor, err := d.GetLookupSensors(leatestSensor)
-		if err != nil {
-			return nil, fmt.Errorf("Service didn't find correct lookup sensor dataset.")
-		}
-		if err := json.Unmarshal(lookupSensor, &sensorIds); err != nil {
-			return nil, fmt.Errorf("Error was happend during unpacking lookup sensors.")
-		}
-	}
+	loader := NewLoaderService()
 
 	switch d.SourceLayer {
 	case "bronze":
+		sensorsMap, err := loader.LoadLeatestMapSensorIdSensorCode()
+		if err != nil {
+			return nil, err
+		}
+		sensorLookup, err := loader.LoadLeatestLookupSensors()
+		if err != nil {
+			return nil, err
+		}
+		stationLookup, err := loader.LoadLeatestLookupStation()
+		if err != nil {
+			return nil, err
+		}
+		if d.Measurements {
+			measurementsData, err := loader.LoadLeatestMeasurementsFromBronze(d.MeasurementsRange)
+			if err != nil {
+				return nil, err
+			}
+			measurementsIndex := make(map[int][]dto.MeasurementValueDTO)
+			measurementsIndex = IndexBronzeMeasurements(measurementsData, sensorsMap)
 
-		return nil,nil
+		}
+		return nil, nil
 	case "silver":
 		return nil, nil
 	default:
-		return nil,nil
+		return nil, fmt.Errorf("Wrong layer used to adaptiation data to domain. Available layers: bronze, silver.")
 	}
 }
 
@@ -280,94 +261,4 @@ func (d *DomainAdapterService) AdaptAqIndexFromBronze(StationID int, Data map[in
 	}
 
 	return result
-}
-
-func (s *DomainAdapterService) GetLookupStations(dt string) ([]byte, error) {
-	env := silver.SetupReferencesStationIds(dt)
-	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "stationsList")
-	fmt.Println(path)
-	data, err := s.s3Client.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func (s *DomainAdapterService) GetLeatestLookupStationDate() string {
-	env := silver.SetupReferencesStationIds("")
-	prefix := fmt.Sprintf("%s/%s/", env.Layer, env.Entity)
-
-	keys, err := s.s3Client.List(prefix)
-	if err != nil {
-		return ""
-	}
-
-	re := regexp.MustCompile(`dt=([0-9]{4}/[0-9]{2}/[0-9]{2})`)
-
-	var dates []string
-
-	for _, key := range keys {
-
-		if strings.HasSuffix(key, "_SUCCESS") {
-			match := re.FindStringSubmatch(key)
-
-			if len(match) > 1 {
-				fmt.Println(key)
-				dates = append(dates, match[1])
-			}
-		}
-	}
-
-	if len(dates) == 0 {
-		return ""
-	}
-
-	sort.Strings(dates)
-
-	return dates[len(dates)-1]
-}
-
-func (s *DomainAdapterService) GetLookupSensors(dt string) ([]byte, error) {
-	env := silver.SetupReferencesSensorIds(dt)
-	path := repositories.PathJson(env.Layer, env.Entity, env.Dt, "sensorsList")
-	fmt.Println(path)
-	data, err := s.s3Client.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func (s *DomainAdapterService) GetLeatestLookupSensorsDate() string {
-	env := silver.SetupReferencesSensorIds("")
-	prefix := fmt.Sprintf("%s/%s/", env.Layer, env.Entity)
-
-	keys, err := s.s3Client.List(prefix)
-	if err != nil {
-		return ""
-	}
-
-	re := regexp.MustCompile(`dt=([0-9]{4}/[0-9]{2}/[0-9]{2})`)
-
-	var dates []string
-
-	for _, key := range keys {
-
-		if strings.HasSuffix(key, "_SUCCESS") {
-			match := re.FindStringSubmatch(key)
-
-			if len(match) > 1 {
-				fmt.Println(key)
-				dates = append(dates, match[1])
-			}
-		}
-	}
-
-	if len(dates) == 0 {
-		return ""
-	}
-
-	sort.Strings(dates)
-
-	return dates[len(dates)-1]
 }
