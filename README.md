@@ -14,6 +14,7 @@ The project is written in Go and follows a layered architecture inspired by mode
 
 ## Architecture
 
+```ASCII
 GIOŚ API
     │
     ▼
@@ -39,19 +40,23 @@ S3 Silver
     │
     ▼
 Postgres Gold
+```
 
 ## Data Flow
 
 ### Fetch Job
 
+```ASCII
 API
  ↓
 DTO
  ↓
 Bronze JSON.GZ
+```
 
 ### Transform Job
 
+```ASCII
 Bronze JSON.GZ
  ↓
 DTO
@@ -59,12 +64,15 @@ DTO
 Domain
  ↓
 Silver Parquet
+```
 
 ### Load Job
 
+```ASCII
 Silver Parquet
  ↓
 Postgres
+```
 
 ## Layers
 
@@ -74,15 +82,18 @@ Postgres
 Immutable raw data storage.
 
 **Format**
-json.gz
+`json.gz`
 
 **Example**
+
+```ASCII
 bronze/
 └── stations/
     └── dt=2026-06-11/
-        ├──stations.json.gz
-        ├──_SUCCESS
-        └──_MANIFEST.json
+        ├── stations.json.gz
+        ├── _SUCCESS
+        └── _MANIFEST.json
+```
 
 ### Silver
 
@@ -90,15 +101,18 @@ bronze/
 Normalized and analytics-ready datasets.
 
 **Format**
-parquet
+`parquet`
 
 **Example**
+
+```ASCII
 silver/
 └── stations/
     └── dt=2026-06-11/
-        ├──stations.parquet
-        ├──_SUCCESS
-        └──_MANIFEST.json
+        ├── stations.parquet
+        ├── _SUCCESS
+        └── _MANIFEST.json
+```
 
 ### Gold
 
@@ -110,6 +124,7 @@ PostgreSQL
 
 ## Project Structure
 
+```ASCII
 cmd/
 internal/
 ├── domain/
@@ -120,6 +135,7 @@ internal/
 │   ├── http/
 │   ├── s3/
 │   └── postgres/
+```
 
 ## Entities
 
@@ -158,29 +174,29 @@ internal/
 
 ## Storage Layout
 
-Convention nameing: {layer}/{entity}/dt={yyyy-mm-dd}/
+Convention nameing: `{layer}/{entity}/dt={yyyy-mm-dd}/`
 
 ### Bronze Example
 
-bronze/stations/dt=2026-06-11/
+`bronze/stations/dt=2026-06-11/`
 
 ### Silver Example
 
-silver/sensors/dt=2026-06-11/
+`silver/sensors/dt=2026-06-11/`
 
 ### Gold Example - TBD
 
 ## Markers
 
-### _SUCCESS
+### `_SUCCESS`
 
 Batch completed successfully.
 
-### _FAILED
+### `_FAILED`
 
 Batch failed.
 
-### _INPROGRESS
+### `_INPROGRESS`
 
 Batch currently running.
 
@@ -188,6 +204,7 @@ Batch currently running.
 
 ### Raw
 
+```JSON
 {
   "requests": [],
   "pages": 0,
@@ -195,15 +212,18 @@ Batch currently running.
   "created_at": "",
   "processed_time": 0
 }
+```
 
 ### Transform
 
+```JSON
 {
   "files": [],
   "records": 0,
   "created_at": "",
   "processed_time": 0
 }
+```
 
 ### Gold Ingestion
 
@@ -211,18 +231,18 @@ TBD
 
 ## Environment Variables
 
-- S3_ACCESS_KEY
-- S3_SECRET_KEY
-- S3_ENDPOINT
-- S3_REGION
-- S3_BUCKET
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_ENDPOINT`
+- `S3_REGION`
+- `S3_BUCKET`
 
 ## Running
 
 Examples:
 
-- go run cmd/fetch_stations/main.go
-- go run cmd/transform_stations/main.go
+- `go run cmd/fetch_stations/main.go`
+- `go run cmd/transform_stations/main.go`
 
 ### Local TBD
 
@@ -234,12 +254,11 @@ Examples:
 
 ## Roadmap
 
- [] Bronze → Silver transformations
- [] Parquet writers
- [] Gold loading
- [] Sensor lookup datasets
- [] Historical backfill
- [] Data quality checks
- [] Metrics and monitoring
- [] Docker deployment
- [] Airflow/Orchestration support
+- Bronze → Silver transformations
+- Parquet writers
+- Gold loading
+- Sensor lookup datasets
+- Historical backfill
+- Data quality checks
+- Metrics and monitoring
+- Docker deployment
