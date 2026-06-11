@@ -1,6 +1,8 @@
 package schemas
 
-type StationRow struct {
+import "time"
+
+type Station struct {
 	StationId                int
 	StationCode              string
 	StationInternationalCode string
@@ -17,6 +19,6 @@ type StationRow struct {
 	District                 string
 	Voivodeship              string
 	Address                  string
-	StartDate                string
-	EndDate                  string
+	StartDate                time.Time
+	EndDate                  time.Time
 }
