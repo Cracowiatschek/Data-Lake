@@ -2,15 +2,10 @@ package services
 
 import (
 	"DataLake/internal/domain"
+	dto "DataLake/internal/infrastructure/gios/dto"
 	"fmt"
 	"strconv"
 	"time"
-
-	// "DataLake/internal/infrastructure/s3"
-	// "DataLake/internal/infrastructure/gios"
-	// dto "DataLake/internal/infrastructure/gios/dto"
-	// httpclient "DataLake/internal/infrastructure/http"
-	dto "DataLake/internal/infrastructure/gios/dto"
 )
 
 type DomainAdapterService struct {
@@ -21,7 +16,6 @@ type DomainAdapterService struct {
 	AqIndexRange      int
 	Measurements      bool
 	MeasurementsRange int
-	// Client *s3.Client
 }
 
 func (d *DomainAdapterService) MakeAdaptation() ([]domain.Station, error) {
@@ -33,6 +27,7 @@ func (d *DomainAdapterService) MakeAdaptation() ([]domain.Station, error) {
 		if err != nil {
 			return nil, err
 		}
+		sensorsMapIndex := IndexRepositorySensorMap(sensorsMap)
 		sensorLookup, err := loader.LoadLeatestLookupSensors()
 		if err != nil {
 			return nil, err
@@ -41,16 +36,69 @@ func (d *DomainAdapterService) MakeAdaptation() ([]domain.Station, error) {
 		if err != nil {
 			return nil, err
 		}
+		measurementsResult := make(map[int][]domain.Measurement)
 		if d.Measurements {
 			measurementsData, err := loader.LoadLeatestMeasurementsFromBronze(d.MeasurementsRange)
 			if err != nil {
 				return nil, err
 			}
-			measurementsIndex := make(map[int][]dto.MeasurementValueDTO)
-			measurementsIndex = IndexBronzeMeasurements(measurementsData, sensorsMap)
+			measurementsIndex := IndexBronzeMeasurements(measurementsData, sensorsMap)
 
+			for _, sensorId := range sensorLookup.SensorId {
+				measurementsCache := d.AdaptMeasurementFromBronze(sensorId, measurementsIndex[sensorId])
+				measurementsResult[sensorId] = append(measurementsResult[sensorId], measurementsCache...)
+			}
 		}
-		return nil, nil
+		sensorResult := make(map[int][]domain.Sensor)
+		if d.Sensors {
+			sensorsData, err := loader.LoadLeatestSensorFromBronze()
+			if err != nil {
+				return nil, err
+			}
+			sensorsDetailsData, err := loader.LoadLeatestSensorDetailsFromBronze()
+			if err != nil {
+				return nil, err
+			}
+			sensorsIndex := IndexBronzeSensor(sensorsData)
+			sensorsDetailsIndex := IndexBronzeSensorDetails(sensorsDetailsData)
+			for _, station := range stationLookup.StationId {
+				sensorCache := d.AdaptSensorFromBronze(station, sensorsMapIndex, sensorsIndex[station], sensorsDetailsIndex, measurementsResult)
+				sensorResult[station] = append(sensorResult[station], sensorCache...)
+			}
+		}
+		aqIndexResult := make(map[int][]domain.AqIndex)
+		if d.AqIndex {
+			aqIndexData, err := loader.LoadLeatestAqIndexesFromBronze(d.AqIndexRange)
+			if err != nil {
+				return nil, err
+			}
+			aqIndexIndex := IndexBronzeAqIndex(aqIndexData)
+			for _, station := range stationLookup.StationId {
+				aqIndexCache := d.AdaptAqIndexFromBronze(station, aqIndexIndex)
+				aqIndexResult[station] = append(aqIndexResult[station], aqIndexCache...)
+			}
+		}
+		var stationResult []domain.Station
+		if d.Stations {
+			stationData, err := loader.LoadLeatestStationFromBronze()
+			if err != nil {
+				return nil, err
+			}
+			stationDetailsData, err := loader.LoadLeatestStationDetailsFromBronze()
+			if err != nil {
+				return nil, err
+			}
+			stationIndex := IndexBronzeStation(stationData[0])
+			stationDeatilsIndex := IndexBronzeStationDetails(stationDetailsData)
+			for _, station := range stationLookup.StationId {
+				stationCache := d.AdaptStationFromBronze(station, stationIndex[station], stationDeatilsIndex[stationIndex[station].StationCode], aqIndexResult[station], sensorResult[station])
+				stationResult = append(stationResult, stationCache)
+			}
+			return stationResult, nil
+		} else {
+			fmt.Println("The DomainAdapterService must have the Station parametr set up on True during af")
+			return nil, nil
+		}
 	case "silver":
 		return nil, nil
 	default:
@@ -102,7 +150,7 @@ func (d *DomainAdapterService) AdaptStationFromBronze(StationID int, BasicData d
 	}
 }
 
-func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData []dto.SensorDTO, DetailsData map[string]dto.SensorDetailsDTO, MeasuermentsData []dto.MeasurementValueDTO) []domain.Sensor {
+func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdToCode map[int]string, BasicData []dto.SensorDTO, DetailsData map[string]dto.SensorDetailsDTO, MeasuermentsData map[int][]domain.Measurement) []domain.Sensor {
 	var result []domain.Sensor
 	errors := 0
 
@@ -112,7 +160,7 @@ func (d *DomainAdapterService) AdaptSensorFromBronze(StationID int, MapSesnorIdT
 		sensorCode := MapSesnorIdToCode[basicRecord.SensorID]
 		detailsRecords := DetailsData[sensorCode]
 		if d.Measurements {
-			measurementsRecords = d.AdaptMeasurementFromBronze(basicRecord.SensorID, MeasuermentsData)
+			measurementsRecords = MeasuermentsData[basicRecord.SensorID]
 		} else {
 			measurementsRecords = nil
 		}
